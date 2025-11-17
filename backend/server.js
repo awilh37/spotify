@@ -1,3 +1,4 @@
+console.log('Server script starting...');
 require('dotenv').config();
 const express = require('express');
 const SpotifyWebApi = require('spotify-web-api-node');
@@ -105,6 +106,7 @@ app.get('/callback', (req, res) => {
 });
 
 app.get('/token', (req, res) => {
+  console.log('Request received for /token endpoint.');
   res.json({ accessToken });
 });
 
