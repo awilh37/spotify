@@ -2,8 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const SpotifyWebApi = require('spotify-web-api-node');
 const cors = require('cors');
-
 const app = express();
+
+// Configure CORS to only accept requests from your GitHub Pages URL
+app.use(
+  cors({
+    origin: 'https://awilh37.github.io', // <-- ADD THIS BLOCK
+  })
+);
+
 const port = process.env.PORT || 3000;
 
 // Use a placeholder for the frontend URL
