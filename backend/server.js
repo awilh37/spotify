@@ -9,7 +9,7 @@ const port = process.env.PORT || 3000;
 // Use a placeholder for the frontend URL
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
 
-app.use(cors({ origin: frontendUrl }));
+app.use(cors());
 
 let accessToken = '';
 let refreshToken = '';
