@@ -3,14 +3,35 @@ require('dotenv').config();
 const express = require('express');
 const SpotifyWebApi = require('spotify-web-api-node');
 const cors = require('cors');
-
 const app = express();
+
+// Configure CORS to only accept requests from your GitHub Pages URL
+app.use(
+  cors({
+    origin: 'https://awilh37.github.io', // <-- ADD THIS BLOCK
+  })
+);
+
 const port = process.env.PORT || 3000;
 
 // Use a placeholder for the frontend URL
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
 
-app.use(cors());
+const allowedOrigins = [frontendUrl, 'https://awilh37.github.io'];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin
+    // (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      var msg = 'The CORS policy for this site does not ' +
+        'allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  }
+}));
 
 let accessToken = '';
 let refreshToken = '';
