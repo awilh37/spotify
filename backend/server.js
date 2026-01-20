@@ -3,7 +3,12 @@ require('dotenv').config();
 const express = require('express');
 const SpotifyWebApi = require('spotify-web-api-node');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const app = express();
+
+// Token persistence
+const tokenFile = path.join(__dirname, '.token.json');
 
 // CORS configuration
 const allowedOrigins = [
@@ -38,6 +43,20 @@ const spotifyApi = new SpotifyWebApi({
   clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
   redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3000/callback',
 });
+
+// Load saved refresh token on startup
+if (fs.existsSync(tokenFile)) {
+  try {
+    const savedToken = JSON.parse(fs.readFileSync(tokenFile, 'utf8'));
+    if (savedToken.refreshToken) {
+      spotifyApi.setRefreshToken(savedToken.refreshToken);
+      tokenStore = savedToken;
+      console.log('Loaded stored refresh token from disk');
+    }
+  } catch (err) {
+    console.error('Error loading stored token:', err);
+  }
+}
 
 // OAuth Scopes
 const scopes = [
@@ -100,6 +119,12 @@ app.get('/callback', (req, res) => {
         expiresAt: Date.now() + expiresIn * 1000,
       };
 
+      // Save refresh token to file for persistence
+      fs.writeFile(tokenFile, JSON.stringify(tokenStore, null, 2), (err) => {
+        if (err) console.error('Error saving token:', err);
+        else console.log('Token saved to disk for persistence');
+      });
+
       console.log('Successfully retrieved access token.');
 
       // Redirect to frontend with token in fragment (won't be sent to server)
@@ -122,7 +147,12 @@ app.get('/callback', (req, res) => {
             expiresAt: Date.now() + newExpiresIn * 1000,
           };
 
-          console.log('Access token refreshed');
+          // Save updated token to file
+          fs.writeFile(tokenFile, JSON.stringify(tokenStore, null, 2), (err) => {
+            if (err) console.error('Error updating token file:', err);
+          });
+
+          console.log('Access token refreshed and saved');
         } catch (err) {
           console.error('Error refreshing token:', err);
         }
@@ -151,6 +181,12 @@ app.post('/logout', (req, res) => {
   tokenStore = {};
   spotifyApi.setAccessToken(null);
   spotifyApi.setRefreshToken(null);
+  
+  // Delete token file on logout
+  fs.unlink(tokenFile, (err) => {
+    if (err && err.code !== 'ENOENT') console.error('Error deleting token file:', err);
+  });
+  
   res.json({ success: true });
 });
 
