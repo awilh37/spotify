@@ -1,0 +1,3 @@
+rand0m.tplinkdns.com {
+	reverse_proxy localhost:3000
+}

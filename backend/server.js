@@ -5,111 +5,343 @@ const SpotifyWebApi = require('spotify-web-api-node');
 const cors = require('cors');
 const app = express();
 
-// Configure CORS to only accept requests from your GitHub Pages URL
+// CORS configuration
+const allowedOrigins = [
+  'https://awilh37.github.io',
+  'http://localhost:3000',
+  'http://localhost:8080',
+  'http://localhost:5173',
+];
+
 app.use(
   cors({
-    origin: 'https://awilh37.github.io', // <-- ADD THIS BLOCK
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS not allowed'));
+      }
+    },
+    credentials: true,
   })
 );
 
+app.use(express.json());
+
 const port = process.env.PORT || 3000;
+const frontendUrl = process.env.FRONTEND_URL || 'https://awilh37.github.io/spotify';
 
-// Use a placeholder for the frontend URL
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
-
-const allowedOrigins = [frontendUrl, 'https://awilh37.github.io'];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin
-    // (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      var msg = 'The CORS policy for this site does not ' +
-        'allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  }
-}));
-
-let accessToken = '';
-let refreshToken = '';
+let tokenStore = {};
 
 const spotifyApi = new SpotifyWebApi({
   clientId: process.env.SPOTIFY_CLIENT_ID,
   clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-  redirectUri: process.env.SPOTIFY_REDIRECT_URI,
+  redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3000/callback',
 });
 
+// OAuth Scopes
+const scopes = [
+  'ugc-image-upload',
+  'user-read-playback-state',
+  'user-modify-playback-state',
+  'user-read-currently-playing',
+  'streaming',
+  'app-remote-control',
+  'user-read-email',
+  'user-read-private',
+  'playlist-read-collaborative',
+  'playlist-modify-public',
+  'playlist-read-private',
+  'playlist-modify-private',
+  'user-library-modify',
+  'user-library-read',
+  'user-top-read',
+  'user-read-playback-position',
+  'user-read-recently-played',
+  'user-follow-read',
+  'user-follow-modify',
+];
+
+// Login endpoint
 app.get('/login', (req, res) => {
-  const scopes = [
-    'ugc-image-upload',
-    'user-read-playback-state',
-    'user-modify-playback-state',
-    'user-read-currently-playing',
-    'streaming',
-    'app-remote-control',
-    'user-read-email',
-    'user-read-private',
-    'playlist-read-collaborative',
-    'playlist-modify-public',
-    'playlist-read-private',
-    'playlist-modify-private',
-    'user-library-modify',
-    'user-library-read',
-    'user-top-read',
-    'user-read-playback-position',
-    'user-read-recently-played',
-    'user-follow-read',
-    'user-follow-modify',
-  ];
-  res.redirect(spotifyApi.createAuthorizeURL(scopes));
+  const state = Math.random().toString(36).substring(7);
+  res.redirect(spotifyApi.createAuthorizeURL(scopes, state));
 });
 
+// Callback endpoint
 app.get('/callback', (req, res) => {
   const error = req.query.error;
   const code = req.query.code;
 
   if (error) {
     console.error('Callback Error:', error);
-    res.send(`Callback Error: ${error}`);
-    return;
+    return res.redirect(`${frontendUrl}?error=${encodeURIComponent(error)}`);
+  }
+
+  if (!code) {
+    console.error('No authorization code received');
+    return res.redirect(`${frontendUrl}?error=no_code`);
   }
 
   spotifyApi
     .authorizationCodeGrant(code)
     .then(data => {
-      accessToken = data.body['access_token'];
-      refreshToken = data.body['refresh_token'];
+      const accessToken = data.body['access_token'];
+      const refreshToken = data.body['refresh_token'];
       const expiresIn = data.body['expires_in'];
 
       spotifyApi.setAccessToken(accessToken);
       spotifyApi.setRefreshToken(refreshToken);
 
+      tokenStore = {
+        accessToken,
+        refreshToken,
+        expiresIn,
+        expiresAt: Date.now() + expiresIn * 1000,
+      };
+
       console.log('Successfully retrieved access token.');
 
-      // Redirect to the frontend
-      res.redirect(frontendUrl);
+      // Redirect to frontend with token in fragment (won't be sent to server)
+      res.redirect(`${frontendUrl}?login=success`);
 
+      // Auto-refresh token before expiry
+      const refreshInterval = (expiresIn - 300) * 1000; // Refresh 5 minutes before expiry
       setInterval(async () => {
-        const data = await spotifyApi.refreshAccessToken();
-        accessToken = data.body['access_token'];
-        spotifyApi.setAccessToken(accessToken);
-        console.log('The access token has been refreshed!');
-      }, expiresIn / 2 * 1000);
+        try {
+          const newData = await spotifyApi.refreshAccessToken();
+          const newAccessToken = newData.body['access_token'];
+          const newExpiresIn = newData.body['expires_in'];
+
+          spotifyApi.setAccessToken(newAccessToken);
+
+          tokenStore = {
+            accessToken: newAccessToken,
+            refreshToken: data.body['refresh_token'],
+            expiresIn: newExpiresIn,
+            expiresAt: Date.now() + newExpiresIn * 1000,
+          };
+
+          console.log('Access token refreshed');
+        } catch (err) {
+          console.error('Error refreshing token:', err);
+        }
+      }, refreshInterval);
     })
     .catch(error => {
       console.error('Error getting Tokens:', error);
-      res.send(`Error getting Tokens: ${error}`);
+      res.redirect(`${frontendUrl}?error=${encodeURIComponent('Failed to get token')}`);
     });
 });
 
+// Get access token
 app.get('/token', (req, res) => {
-  console.log('Request received for /token endpoint.');
-  res.json({ accessToken });
+  if (tokenStore.accessToken) {
+    res.json({
+      accessToken: tokenStore.accessToken,
+      expiresAt: tokenStore.expiresAt,
+    });
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
 });
 
+// Logout endpoint
+app.post('/logout', (req, res) => {
+  tokenStore = {};
+  spotifyApi.setAccessToken(null);
+  spotifyApi.setRefreshToken(null);
+  res.json({ success: true });
+});
+
+// Proxy endpoints for Spotify API
+app.get('/me', async (req, res) => {
+  try {
+    const data = await spotifyApi.getMe();
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/me/playlists', async (req, res) => {
+  try {
+    const data = await spotifyApi.getUserPlaylists();
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/me/player', async (req, res) => {
+  try {
+    const data = await spotifyApi.getMyCurrentPlaybackState();
+    res.json(data.body || {});
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/me/player/currently-playing', async (req, res) => {
+  try {
+    const data = await spotifyApi.getMyCurrentPlayingTrack();
+    res.json(data.body || {});
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/me/player/devices', async (req, res) => {
+  try {
+    const data = await spotifyApi.getMyDevices();
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/search', async (req, res) => {
+  try {
+    const { q, type = 'track' } = req.query;
+    if (!q) return res.status(400).json({ error: 'Missing query parameter' });
+    const data = await spotifyApi.search(q, [type], { limit: 20 });
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/playlist/:id/tracks', async (req, res) => {
+  try {
+    const data = await spotifyApi.getPlaylistTracks(req.params.id);
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// Playback control endpoints
+app.post('/me/player/play', async (req, res) => {
+  try {
+    const { deviceId, context_uri, uris, offset } = req.body;
+    const options = deviceId ? { device_id: deviceId } : {};
+    const body = {};
+    if (context_uri) body.context_uri = context_uri;
+    if (uris) body.uris = uris;
+    if (offset !== undefined) body.offset = offset;
+
+    await spotifyApi.play(body, options);
+    res.json({ success: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post('/me/player/pause', async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+    const options = deviceId ? { device_id: deviceId } : {};
+    await spotifyApi.pause(options);
+    res.json({ success: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post('/me/player/next', async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+    const options = deviceId ? { device_id: deviceId } : {};
+    await spotifyApi.skipToNext(options);
+    res.json({ success: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post('/me/player/previous', async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+    const options = deviceId ? { device_id: deviceId } : {};
+    await spotifyApi.skipToPrevious(options);
+    res.json({ success: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post('/me/player/seek', async (req, res) => {
+  try {
+    const { position_ms, deviceId } = req.body;
+    const options = deviceId ? { device_id: deviceId } : {};
+    await spotifyApi.seek(position_ms, options);
+    res.json({ success: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.put('/me/player/volume', async (req, res) => {
+  try {
+    const { volume_percent, deviceId } = req.body;
+    const options = deviceId ? { device_id: deviceId } : {};
+    await spotifyApi.setVolume(volume_percent, options);
+    res.json({ success: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.put('/me/player/shuffle', async (req, res) => {
+  try {
+    const { state, deviceId } = req.body;
+    const options = deviceId ? { device_id: deviceId } : {};
+    await spotifyApi.setShuffle(state, options);
+    res.json({ success: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/me/tracks', async (req, res) => {
+  try {
+    const data = await spotifyApi.getMySavedTracks({ limit: 50 });
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post('/me/tracks', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    await spotifyApi.addToMySavedTracks(ids);
+    res.json({ success: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.delete('/me/tracks', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    await spotifyApi.removeFromMySavedTracks(ids);
+    res.json({ success: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// Error handler
+function handleError(res, err) {
+  console.error('API Error:', err.message);
+  if (err.statusCode === 401) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  res.status(500).json({ error: err.message || 'Internal server error' });
+}
+
 app.listen(port, () => {
-  console.log(`Spotify app listening at http://localhost:${port}`);
+  console.log(`Spotify controller listening on port ${port}`);
+  console.log(`Frontend URL: ${frontendUrl}`);
 });
