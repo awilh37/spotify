@@ -10,9 +10,9 @@ const backendUrl = (() => {
   
   // Production (GitHub Pages) - Using ngrok tunnel
   if (window.location.hostname === 'awilh37.github.io') {
-    return 'https://isochroous-monocyclic-yi.ngrok-free.dev'; 
+    return 'https://rand0m.tplinkdns.com'; 
   }
   
   // Fallback
-  return 'https://isochroous-monocyclic-yi.ngrok-free.dev';
+  return 'https://rand0m.tplinkdns.com';
 })();

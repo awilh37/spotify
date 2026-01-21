@@ -274,13 +274,13 @@ app.get('/playlist/:id/tracks', async (req, res) => {
 app.post('/me/player/play', async (req, res) => {
   try {
     const { deviceId, context_uri, uris, offset } = req.body;
-    const options = deviceId ? { device_id: deviceId } : {};
-    const body = {};
-    if (context_uri) body.context_uri = context_uri;
-    if (uris) body.uris = uris;
-    if (offset !== undefined) body.offset = offset;
+    const options = {};
+    if (context_uri) options.context_uri = context_uri;
+    if (uris) options.uris = uris;
+    if (offset !== undefined) options.offset = offset;
+    if (deviceId) options.device_id = deviceId;
 
-    await spotifyApi.play(body, options);
+    await spotifyApi.play(options);
     res.json({ success: true });
   } catch (err) {
     handleError(res, err);
