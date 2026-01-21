@@ -49,6 +49,7 @@ async function backendApi(endpoint, method = 'GET', body = null) {
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include', // Send cookies with cross-origin requests
     };
 
     if (body) options.body = JSON.stringify(body);
@@ -119,16 +120,21 @@ async function handleLogout() {
 
 async function checkAuthStatus() {
   try {
+    console.log('Checking auth status with backend:', BACKEND_URL);
     const tokenData = await backendApi('/token');
+    console.log('Token response:', tokenData);
     if (tokenData.accessToken) {
       accessToken = tokenData.accessToken;
       isAuthenticated = true;
+      console.log('Authentication successful');
       showAppUI();
       await initializeApp();
     } else {
+      console.log('No access token in response');
       showAuthUI();
     }
   } catch (error) {
+    console.error('Auth check failed:', error);
     showAuthUI();
   }
 }
@@ -528,10 +534,16 @@ likeBtn?.addEventListener('click', async () => {
 
 // Check authentication on page load
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM loaded, checking params...');
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('login') === 'success') {
+  const loginSuccess = urlParams.get('login');
+  console.log('Login param:', loginSuccess);
+  
+  if (loginSuccess === 'success') {
+    console.log('Detected login=success, clearing URL');
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
+  console.log('Calling checkAuthStatus...');
   checkAuthStatus();
 });
