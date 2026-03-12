@@ -3,7 +3,7 @@
 // ============================================================================
 
 // Configuration
-const BACKEND_URL = backendUrl || 'http://localhost:3000';
+const BACKEND_URL = backendUrl || 'https://rand0m.tplinkdns.com/spotify';
 const POLLING_INTERVAL = 1000; // Update player state every 1 second
 
 // DOM Elements
@@ -318,22 +318,33 @@ async function seekToPosition(ms) {
 
 async function searchTracks(query) {
   try {
-    if (!query.trim()) {
+    if (!query || !query.trim()) {
       searchResults.innerHTML = '';
       return;
     }
 
-    const data = await backendApi(`/search?q=${encodeURIComponent(query)}&type=track`);
+    // Request multiple types from backend
+    const data = await backendApi(`/search?q=${encodeURIComponent(query)}&type=track,album,artist,playlist`);
     searchResults.innerHTML = '';
 
-    if (data.tracks && data.tracks.items.length > 0) {
+    // Helper to create section headers
+    function addSectionHeader(title) {
+      const h = document.createElement('h3');
+      h.className = 'search-section-header';
+      h.textContent = title;
+      searchResults.appendChild(h);
+    }
+
+    // Tracks
+    if (data.tracks && data.tracks.items && data.tracks.items.length > 0) {
+      addSectionHeader('Tracks');
       data.tracks.items.forEach(track => {
         const div = document.createElement('div');
         div.className = 'search-result-item';
 
         const img = document.createElement('img');
-        if (track.album.images && track.album.images.length > 0) {
-          img.src = track.album.images[2].url; // smallest image
+        if (track.album && track.album.images && track.album.images.length > 0) {
+          img.src = track.album.images[Math.max(0, track.album.images.length - 1)].url;
         }
 
         const info = document.createElement('div');
@@ -345,7 +356,7 @@ async function searchTracks(query) {
 
         const artist = document.createElement('div');
         artist.className = 'track-artist';
-        artist.textContent = track.artists.map(a => a.name).join(', ');
+        artist.textContent = (track.artists || []).map(a => a.name).join(', ');
 
         info.appendChild(trackTitle);
         info.appendChild(artist);
@@ -360,8 +371,137 @@ async function searchTracks(query) {
 
         searchResults.appendChild(div);
       });
-    } else {
-      searchResults.innerHTML = '<div class="search-result-item">No tracks found</div>';
+    }
+
+    // Albums
+    if (data.albums && data.albums.items && data.albums.items.length > 0) {
+      addSectionHeader('Albums');
+      data.albums.items.forEach(album => {
+        const div = document.createElement('div');
+        div.className = 'search-result-item';
+
+        const img = document.createElement('img');
+        if (album.images && album.images.length > 0) img.src = album.images[Math.max(0, album.images.length - 1)].url;
+
+        const info = document.createElement('div');
+        info.className = 'track-info';
+
+        const title = document.createElement('div');
+        title.className = 'track-title';
+        title.textContent = album.name;
+
+        const artist = document.createElement('div');
+        artist.className = 'track-artist';
+        artist.textContent = (album.artists || []).map(a => a.name).join(', ');
+
+        info.appendChild(title);
+        info.appendChild(artist);
+
+        div.appendChild(img);
+        div.appendChild(info);
+        // Play the album context when clicked
+        div.addEventListener('click', () => {
+          if (album.uri) playPlaylist(album.uri);
+          searchResults.innerHTML = '';
+          searchInput.value = '';
+        });
+
+        searchResults.appendChild(div);
+      });
+    }
+
+    // Playlists
+    if (data.playlists && data.playlists.items && data.playlists.items.length > 0) {
+      addSectionHeader('Playlists');
+      data.playlists.items.forEach(pl => {
+        const div = document.createElement('div');
+        div.className = 'search-result-item';
+
+        const img = document.createElement('img');
+        if (pl.images && pl.images.length > 0) img.src = pl.images[0].url;
+
+        const info = document.createElement('div');
+        info.className = 'track-info';
+
+        const title = document.createElement('div');
+        title.className = 'track-title';
+        title.textContent = pl.name;
+
+        const owner = document.createElement('div');
+        owner.className = 'track-artist';
+        owner.textContent = (pl.owner && pl.owner.display_name) || '';
+
+        info.appendChild(title);
+        info.appendChild(owner);
+
+        div.appendChild(img);
+        div.appendChild(info);
+        div.addEventListener('click', () => {
+          if (pl.uri) playPlaylist(pl.uri);
+          searchResults.innerHTML = '';
+          searchInput.value = '';
+        });
+
+        searchResults.appendChild(div);
+      });
+    }
+
+    // Artists
+    if (data.artists && data.artists.items && data.artists.items.length > 0) {
+      addSectionHeader('Artists');
+      data.artists.items.forEach(artist => {
+        const div = document.createElement('div');
+        div.className = 'search-result-item';
+
+        const img = document.createElement('img');
+        if (artist.images && artist.images.length > 0) img.src = artist.images[Math.max(0, artist.images.length - 1)].url;
+
+        const info = document.createElement('div');
+        info.className = 'track-info';
+
+        const title = document.createElement('div');
+        title.className = 'track-title';
+        title.textContent = artist.name;
+
+        const followers = document.createElement('div');
+        followers.className = 'track-artist';
+        followers.textContent = `${artist.followers ? artist.followers.total : 0} followers`;
+
+        info.appendChild(title);
+        info.appendChild(followers);
+
+        div.appendChild(img);
+        div.appendChild(info);
+        // On artist click, fetch top tracks and play the first one
+        div.addEventListener('click', async () => {
+          try {
+            const top = await backendApi(`/artist/${artist.id}/top-tracks`);
+            if (top && top.tracks && top.tracks.length > 0) {
+              playTrack(top.tracks[0].uri);
+              showNotification(`Playing top track by ${artist.name}`);
+            } else {
+              showNotification('No top tracks found for this artist', 'info');
+            }
+          } catch (err) {
+            console.error('Error fetching artist top tracks:', err);
+            showNotification('Error fetching artist top tracks', 'error');
+          }
+          searchResults.innerHTML = '';
+          searchInput.value = '';
+        });
+
+        searchResults.appendChild(div);
+      });
+    }
+
+    // If no results in any section, show not found
+    const anyResults = (data.tracks && data.tracks.items && data.tracks.items.length) ||
+      (data.albums && data.albums.items && data.albums.items.length) ||
+      (data.playlists && data.playlists.items && data.playlists.items.length) ||
+      (data.artists && data.artists.items && data.artists.items.length);
+
+    if (!anyResults) {
+      searchResults.innerHTML = '<div class="search-result-item">No results found</div>';
     }
   } catch (error) {
     console.error('Error searching:', error);

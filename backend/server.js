@@ -254,7 +254,21 @@ app.get('/search', async (req, res) => {
   try {
     const { q, type = 'track' } = req.query;
     if (!q) return res.status(400).json({ error: 'Missing query parameter' });
-    const data = await spotifyApi.search(q, [type], { limit: 20 });
+    // Allow comma separated types (e.g. track,album,artist,playlist)
+    const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+    const data = await spotifyApi.search(q, types, { limit: 20 });
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// Get artist top tracks (used when clicking an artist search result)
+app.get('/artist/:id/top-tracks', async (req, res) => {
+  try {
+    const id = req.params.id;
+    // Country code required by Spotify API
+    const data = await spotifyApi.getArtistTopTracks(id, 'US');
     res.json(data.body);
   } catch (err) {
     handleError(res, err);
