@@ -39,13 +39,20 @@
         <h1>Spotify Controller</h1>
       </div>
       <div id="user-profile" class="user-profile"></div>
+      <button id="pip-toggle" class="pip-btn">Mini Player</button>
       <button id="logout-btn" class="logout-btn">Logout</button>
     </header>
 
     <div class="main-layout">
       <!-- Sidebar -->
       <aside class="sidebar">
-        <h2>Your Playlists</h2>
+        <h2>Browse Library</h2>
+        <div class="browse-buttons">
+          <button id="btn-playlists" class="browse-btn active">Playlists</button>
+          <button id="btn-saved-albums" class="browse-btn">Saved Albums</button>
+          <button id="btn-followed-artists" class="browse-btn">Artists</button>
+          <button id="btn-saved-tracks" class="browse-btn">Saved Tracks</button>
+        </div>
         <ul id="playlist-list" class="playlist-list"></ul>
       </aside>
 
@@ -64,6 +71,12 @@
             <button id="search-button" class="search-button">Search</button>
           </div>
           <div id="search-results" class="search-results"></div>
+        </section>
+
+        <!-- Library Browser Section -->
+        <section id="browser-section" class="browser-section">
+          <h2 id="browser-title">Browse Playlists</h2>
+          <div id="browser-content" class="browser-content">Select a library tab or search result</div>
         </section>
 
         <!-- Player Section -->

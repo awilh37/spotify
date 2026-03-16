@@ -223,6 +223,33 @@ app.get('/me/playlists', async (req, res) => {
   }
 });
 
+app.get('/me/albums', async (req, res) => {
+  try {
+    const data = await spotifyApi.getMySavedAlbums({ limit: 50 });
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/me/following/artists', async (req, res) => {
+  try {
+    const data = await spotifyApi.getFollowedArtists({ limit: 50 });
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/album/:id/tracks', async (req, res) => {
+  try {
+    const data = await spotifyApi.getAlbumTracks(req.params.id, { limit: 50 });
+    res.json(data.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 app.get('/me/player', async (req, res) => {
   try {
     const data = await spotifyApi.getMyCurrentPlaybackState();

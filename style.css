@@ -220,6 +220,111 @@ body {
   transform: translateX(5px);
 }
 
+.browse-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+}
+
+.browse-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-radius: 20px;
+  padding: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.browse-btn.active,
+.browse-btn:hover {
+  background: #1db954;
+  border-color: #1db954;
+  color: #000;
+}
+
+.browser-section {
+  margin-bottom: 30px;
+  background: rgba(38, 38, 38, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.browser-section h2 {
+  margin-bottom: 12px;
+  color: #1db954;
+}
+
+.browser-content {
+  max-height: 320px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.pip-btn {
+  margin-right: 12px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+}
+
+.pip-window {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 280px;
+  background: rgba(17, 17, 17, 0.95);
+  border: 1px solid rgba(29, 185, 84, 0.8);
+  border-radius: 16px;
+  z-index: 999;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+
+.pip-window h4 {
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+  color: #1db954;
+}
+
+.pip-action-buttons {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.pip-action-buttons button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  color: #fff;
+  width: 30%;
+  height: 32px;
+  cursor: pointer;
+}
+
+.pip-window .pip-close {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
 /* Main Content */
 .main-content {
   flex: 1;
