@@ -55,18 +55,56 @@ const spotifyApi = new SpotifyWebApi({
   redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3000/callback',
 });
 
-// Load saved refresh token on startup
+// Load saved token on startup
 if (fs.existsSync(tokenFile)) {
   try {
     const savedToken = JSON.parse(fs.readFileSync(tokenFile, 'utf8'));
+
     if (savedToken.refreshToken) {
       spotifyApi.setRefreshToken(savedToken.refreshToken);
       tokenStore = savedToken;
       console.log('Loaded stored refresh token from disk');
+
+      if (savedToken.accessToken) {
+        spotifyApi.setAccessToken(savedToken.accessToken);
+      }
+
+      const now = Date.now();
+      const hasValidToken = savedToken.accessToken && savedToken.expiresAt && now < savedToken.expiresAt;
+
+      if (!hasValidToken) {
+        console.log('Access token expired or missing, refreshing access token with refreshToken');
+        spotifyApi.refreshAccessToken()
+          .then(data => {
+            const accessToken = data.body['access_token'];
+            const expiresIn = data.body['expires_in'];
+
+            spotifyApi.setAccessToken(accessToken);
+            tokenStore.accessToken = accessToken;
+            tokenStore.expiresIn = expiresIn;
+            tokenStore.expiresAt = Date.now() + expiresIn * 1000;
+
+            fs.writeFile(tokenFile, JSON.stringify(tokenStore, null, 2), (err) => {
+              if (err) console.error('Error updating token file:', err);
+            });
+
+            console.log('Access token refreshed from saved refresh token');
+          })
+          .catch(err => {
+            console.error('Error refreshing access token from saved refresh token:', err);
+            tokenStore = {}; // not authenticated
+          });
+      }
+    } else {
+      console.log('Saved token file exists but missing refreshToken - clearing tokenStore');
+      tokenStore = {};
     }
   } catch (err) {
     console.error('Error loading stored token:', err);
+    tokenStore = {};
   }
+} else {
+  console.log('No token file exists on startup - user must login');
 }
 
 // OAuth Scopes
@@ -176,18 +214,46 @@ app.get('/callback', (req, res) => {
 });
 
 // Get access token
-app.get('/token', (req, res) => {
+app.get('/token', async (req, res) => {
   console.log('Token endpoint called, tokenStore keys:', Object.keys(tokenStore));
-  if (tokenStore.accessToken) {
-    console.log('Returning access token');
-    res.json({
+
+  if (tokenStore.accessToken && tokenStore.expiresAt && Date.now() < tokenStore.expiresAt) {
+    console.log('Returning valid access token');
+    return res.json({
       accessToken: tokenStore.accessToken,
       expiresAt: tokenStore.expiresAt,
     });
-  } else {
-    console.log('No access token in tokenStore');
-    res.status(401).json({ error: 'Not authenticated' });
   }
+
+  if (tokenStore.refreshToken) {
+    try {
+      console.log('Refreshing access token using refresh token');
+      const data = await spotifyApi.refreshAccessToken();
+      const accessToken = data.body['access_token'];
+      const expiresIn = data.body['expires_in'];
+
+      spotifyApi.setAccessToken(accessToken);
+      tokenStore.accessToken = accessToken;
+      tokenStore.expiresIn = expiresIn;
+      tokenStore.expiresAt = Date.now() + expiresIn * 1000;
+
+      fs.writeFile(tokenFile, JSON.stringify(tokenStore, null, 2), (err) => {
+        if (err) console.error('Error updating token file on refresh:', err);
+      });
+
+      return res.json({
+        accessToken: tokenStore.accessToken,
+        expiresAt: tokenStore.expiresAt,
+      });
+    } catch (err) {
+      console.error('Error refreshing access token:', err);
+      tokenStore = {};
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+  }
+
+  console.log('No tokenStore data available; user must log in');
+  return res.status(401).json({ error: 'Not authenticated' });
 });
 
 // Logout endpoint
