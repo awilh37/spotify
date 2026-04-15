@@ -8,7 +8,7 @@ const path = require('path');
 const app = express();
 
 // Token persistence
-const tokenFile = path.join(__dirname, '.token.json');
+const tokenFile = path.join(__dirname, 'token.json');
 
 // CORS configuration
 const allowedOrigins = [
